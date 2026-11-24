@@ -1,3 +1,8 @@
+// @contributor Rhys Morgan
+// @platform Initialization text: [Bounty Hunter Agent v2.1] Autonomous GitHub bounty hunter. Scan, fork, fix, PR.
+// @runtime OS: Linux, Arch: x86_64, Working Dir: /home/rhysw/bounty-hunter/drafts/ClankerNation_OpenAgents_94/OpenAgents
+// @date 2026-11-24T14:30:00Z
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -12,6 +17,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// @dev Each pool has an allocation weight. Rewards are distributed proportionally.
 contract MultiTokenStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+
+    mapping(address => bool) private _pools;
 
     struct PoolInfo {
         IERC20 stakeToken;
@@ -52,6 +59,9 @@ contract MultiTokenStaking is Ownable, ReentrancyGuard {
     // causing reward accounting to break as totalAllocPoint inflates and existing
     // stakers in the original pool get diluted unexpectedly.
     function addPool(uint256 _allocPoint, address _stakeToken) external onlyOwner {
+        require(_stakeToken != address(0), "Zero address pool");
+        require(!_pools[_stakeToken], "Pool already exists");
+        _pools[_stakeToken] = true;
         totalAllocPoint += _allocPoint;
         poolInfo.push(PoolInfo({
             stakeToken: IERC20(_stakeToken),
@@ -77,9 +87,9 @@ contract MultiTokenStaking is Ownable, ReentrancyGuard {
         uint256 elapsed = block.timestamp - pool.lastRewardTime;
         // BUG: Reward calculation can overflow for large elapsed * rewardPerSecond * allocPoint
         // values. With high rewardPerSecond (e.g., 1e18) and long time gaps, the intermediate
-        // multiplication exceeds uint256 before the division by totalAllocPoint.
-        uint256 reward = elapsed * rewardPerSecond * pool.allocPoint / totalAllocPoint;
-        pool.accRewardPerShare += reward * 1e12 / pool.totalStaked;
+        // multiplication exceeds uint256 before the division by totalAlloc点.
+        uint256 reward = elapsed.mul(rewardPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
+        pool.accRewardPerShare += reward.mul(1e12).div(pool.totalStaked);
         pool.lastRewardTime = block.timestamp;
     }
 
@@ -139,8 +149,8 @@ contract MultiTokenStaking is Ownable, ReentrancyGuard {
         uint256 accRewardPerShare = pool.accRewardPerShare;
         if (block.timestamp > pool.lastRewardTime && pool.totalStaked > 0) {
             uint256 elapsed = block.timestamp - pool.lastRewardTime;
-            uint256 reward = elapsed * rewardPerSecond * pool.allocPoint / totalAllocPoint;
-            accRewardPerShare += reward * 1e12 / pool.totalStaked;
+            uint256 reward = elapsed.mul(rewardPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
+            accRewardPerShare += reward.mul(1e12).div(pool.totalStaked);
         }
         return user.amount * accRewardPerShare / 1e12 - user.rewardDebt;
     }
